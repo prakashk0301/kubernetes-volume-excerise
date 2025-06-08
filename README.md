@@ -129,3 +129,99 @@ spec:
 |------------------|--------------|-------------------|------------------|--------------|
 | Static           | Manual       | Yes               | Low              | ReadWriteOnce |
 | Dynamic          | Automatic    | No                | High             | ReadWriteOnce |
+
+
+
+# Using Amazon EFS with Kubernetes for ReadWriteMany Access
+
+Amazon EFS (Elastic File System) provides support for the `ReadWriteMany` (RWX) access mode, making it ideal for workloads where multiple pods across nodes need to read and write concurrently to a shared volume. Unlike AWS EBS, which only supports `ReadWriteOnce`, EFS is well-suited for shared access.
+
+## ✅ Prerequisites
+
+Before using EFS volumes with Kubernetes, you must install the EFS CSI Driver:
+
+```bash
+kubectl apply -k "github.com/kubernetes-sigs/aws-efs-csi-driver/deploy/kubernetes/overlays/stable/ecr/?ref=release-1.7"
+```
+
+Ensure you have an EFS filesystem created in AWS and that it's accessible from your Kubernetes worker nodes (VPC, subnets, and security groups configured correctly).
+
+---
+
+## 📄 YAML Manifests
+
+### `pv.yaml` – PersistentVolume
+
+```yaml
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: efs-pv
+spec:
+  capacity:
+    storage: 5Gi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: efs-sc
+  csi:
+    driver: efs.csi.aws.com
+    volumeHandle: fs-12345678  # Replace with your EFS FileSystem ID
+```
+
+---
+
+### `pvc.yaml` – PersistentVolumeClaim
+
+```yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: efs-pvc
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: efs-sc
+  resources:
+    requests:
+      storage: 5Gi
+```
+
+---
+
+### `deployment.yaml` – Deployment Using EFS Volume
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: efs-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: efs-demo
+  template:
+    metadata:
+      labels:
+        app: efs-demo
+    spec:
+      containers:
+      - name: web
+        image: busybox
+        command: ["sh", "-c", "while true; do echo $(hostname) >> /data/out.txt; sleep 5; done"]
+        volumeMounts:
+        - name: efs-volume
+          mountPath: /data
+      volumes:
+      - name: efs-volume
+        persistentVolumeClaim:
+          claimName: efs-pvc
+```
+
+---
+
+## 🧪 Verification
+
+Once deployed, you can verify the shared volume is working as expected by checking the contents of `/data/out.txt` from both pod replicas. They should all write to the same file due to shared access via EFS.
