@@ -1,16 +1,20 @@
-AWS EBS (Elastic Block Store) Volumes:
+# Using AWS EBS (Elastic Block Store) Volumes in Kubernetes
 
-use case: Stateful workloads (databases, etc.)
-   -  Kubernetes can dynamically provision EBS volumes using the aws-ebs-csi-driver.
-   -  These volumes are attached to the node where the pod runs, and move with the pod if rescheduled.
-   -  You use StorageClass + PVC. Kubernetes handles the rest.
+## ✅ Use Case
+**Stateful workloads** (e.g., databases) that need persistent storage.
 
-******************************************************************************
-Static Provisioning with Pre-created EBS Volume:
-  - If you want to create the EBS volume manually (e.g., via AWS Console), note the volume ID and availability zone 
+- Kubernetes can dynamically provision EBS volumes using the **aws-ebs-csi-driver**.
+- These volumes are attached to the node where the pod runs, and move with the pod if rescheduled.
+- You use a **StorageClass + PVC**, and Kubernetes handles the rest.
 
+---
 
-# pv-static.yaml
+## 🧱 Static Provisioning with Pre-created EBS Volume
+
+If you want to create the EBS volume manually (e.g., via AWS Console), note the **volume ID** and **availability zone**.
+
+### 📝 `pv-static.yaml`
+```yaml
 apiVersion: v1
 kind: PersistentVolume
 metadata:
@@ -27,8 +31,10 @@ spec:
     driver: ebs.csi.aws.com
     volumeHandle: vol-xxxxxxxx  # Replace with actual EBS volume ID
     fsType: ext4
+```
 
-# pvc-static.yaml
+### 📝 `pvc-static.yaml`
+```yaml
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -41,8 +47,10 @@ spec:
       storage: 1Gi
   volumeName: ebs-pv-static
   storageClassName: manual
+```
 
-# pod.yaml
+### 📝 `pod.yaml`
+```yaml
 apiVersion: v1
 kind: Pod
 metadata:
@@ -59,22 +67,27 @@ spec:
   - name: ebs-volume
     persistentVolumeClaim:
       claimName: ebs-pvc
+```
 
-*****************************************************************
-Dynamic Provisioning of volume:
-install storage EBS driver: https://github.com/kubernetes-sigs/aws-ebs-csi-driver
+---
 
-# storageclass.yaml
+## ⚙️ Dynamic Provisioning of Volume
+
+Install the EBS CSI driver:  
+🔗 [aws-ebs-csi-driver GitHub](https://github.com/kubernetes-sigs/aws-ebs-csi-driver)
+
+### 📝 `storageclass.yaml`
+```yaml
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
 metadata:
   name: ebs-sc
 provisioner: ebs.csi.aws.com
 volumeBindingMode: WaitForFirstConsumer
+```
 
----
-
-# pvc.yaml
+### 📝 `pvc.yaml`
+```yaml
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -86,19 +99,10 @@ spec:
     requests:
       storage: 5Gi
   storageClassName: ebs-sc
+```
 
-
-# storageclass.yaml
-apiVersion: storage.k8s.io/v1
-kind: StorageClass
-metadata:
-  name: ebs-sc
-provisioner: ebs.csi.aws.com
-volumeBindingMode: WaitForFirstConsumer
-
----
-
-# pod.yaml
+### 📝 `pod.yaml`
+```yaml
 apiVersion: v1
 kind: Pod
 metadata:
@@ -115,24 +119,13 @@ spec:
   - name: ebs-volume
     persistentVolumeClaim:
       claimName: ebs-pvc
+```
 
+---
 
+## ✅ Summary
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+| Type             | Provisioning | Manual EBS Volume | Automation Level | Access Mode  |
+|------------------|--------------|-------------------|------------------|--------------|
+| Static           | Manual       | Yes               | Low              | ReadWriteOnce |
+| Dynamic          | Automatic    | No                | High             | ReadWriteOnce |
